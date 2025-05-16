@@ -329,21 +329,31 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
     }
     
     // Si hay una imagen, mostrarla
-    if (widget.sign.imageUrl != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Image.asset(
-          widget.sign.imageUrl!,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          errorBuilder: (context, error, stackTrace) {
-            // Si hay un error al cargar la imagen, mostrar la animación de icono
-            return _buildIconAnimation();
-          },
-        ),
-      );
-    }
+if (widget.sign.imageUrl != null) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(20),
+    child: Image.network(  // ← CAMBIADO A Image.network
+      widget.sign.imageUrl!,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                : null,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        // Si hay un error al cargar la imagen, mostrar la animación de icono
+        return _buildIconAnimation();
+      },
+    ),
+  );
+}
     
     // Si no hay imagen ni video, mostrar la animación de icono
     return _buildIconAnimation();

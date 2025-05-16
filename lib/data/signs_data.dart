@@ -40,38 +40,46 @@ class SignsData {
   }
 
   static final List<Sign> _alphabetSigns = [
-    Sign(
+    const Sign(
       id: 'a',
       categoryId: 'alphabet',
       word: 'A',
       description: 'La letra A en lenguaje de señas.',
       instructions: 'Cierra el puño con el pulgar al lado.',
       icon: Icons.sign_language,
-      imageUrl: 'assets/images/signs/alphabet/a.png',
+      imageUrl: 'https://previews.123rf.com/images/pchvector/pchvector2211/pchvector221101908/194247113-mano-que-muestra-la-letra-a-ilustraci%C3%B3n-de-vector-de-alfabeto-de-lenguaje-de-se%C3%B1as-dedo-en-posici%C3%B3n-.jpg',
     ),
-    Sign(
+    const Sign(
       id: 'b',
       categoryId: 'alphabet',
       word: 'B',
       description: 'La letra B en lenguaje de señas.',
       instructions: 'Extiende los dedos hacia arriba con el pulgar doblado hacia la palma.',
       icon: Icons.sign_language,
-      imageUrl: 'assets/images/signs/alphabet/b.png',
+      imageUrl: 'https://media.istockphoto.com/id/1441720791/es/vector/mano-mostrando-la-letra-b-ilustraci%C3%B3n-vectorial-del-alfabeto-de-lengua-de-signos-dedo-en.jpg?s=1024x1024&w=is&k=20&c=ub8WjHz3fCvsNYZAU1VkJy6vuVNxHzvwzyxB_vV2Y4w=',
     ),
-    Sign(
+    const Sign(
       id: 'c',
       categoryId: 'alphabet',
       word: 'C',
       description: 'La letra C en lenguaje de señas.',
       instructions: 'Forma una C con tu mano, curvando los dedos.',
       icon: Icons.sign_language,
-      imageUrl: 'assets/images/signs/alphabet/c.png',
-    ),
-    // Más letras del alfabeto...
+      imageUrl: 'https://previews.123rf.com/images/pchvector/pchvector2211/pchvector221101901/194247086-mano-que-muestra-la-letra-c-lenguaje-de-se%C3%B1as-alfabeto-ilustraci%C3%B3n-vectorial-dedo-en-diferente-posic.jpg'
+          ),
+    const Sign(
+      id: 'd',
+      categoryId: 'alphabet',
+      word: 'D',
+      description: 'La letra D en lenguaje de señas.',
+      instructions: 'Forma una D con tu mano, manteniendo el dedo índice extendido y los demás dedos cerrados.',
+      icon: Icons.sign_language,
+      imageUrl: 'https://previews.123rf.com/images/pchvector/pchvector2211/pchvector221101881/194247084-mano-que-muestra-la-letra-d-ilustraci%C3%B3n-de-vector-de-alfabeto-de-lenguaje-de-se%C3%B1as-dedo-en-posici%C3%B3n-.jpg'
+    )
   ];
 
   static final List<Sign> _numberSigns = [
-    Sign(
+    const Sign(
       id: 'num1',
       categoryId: 'numbers',
       word: '1',
@@ -80,7 +88,7 @@ class SignsData {
       icon: Icons.looks_one,
       imageUrl: 'assets/images/signs/numbers/1.png',
     ),
-    Sign(
+    const Sign(
       id: 'num2',
       categoryId: 'numbers',
       word: '2',
@@ -89,7 +97,7 @@ class SignsData {
       icon: Icons.looks_two,
       imageUrl: 'assets/images/signs/numbers/2.png',
     ),
-    Sign(
+    const Sign(
       id: 'num3',
       categoryId: 'numbers',
       word: '3',
@@ -102,7 +110,7 @@ class SignsData {
   ];
 
   static final List<Sign> _greetingSigns = [
-    Sign(
+    const Sign(
       id: 'hello',
       categoryId: 'greetings',
       word: 'Hola',
@@ -112,7 +120,7 @@ class SignsData {
       imageUrl: 'assets/images/signs/greetings/hello.png',
       videoUrl: 'assets/videos/signs/greetings/hello.mp4',
     ),
-    Sign(
+    const Sign(
       id: 'goodbye',
       categoryId: 'greetings',
       word: 'Adiós',
@@ -122,7 +130,7 @@ class SignsData {
       imageUrl: 'assets/images/signs/greetings/goodbye.png',
       videoUrl: 'assets/videos/signs/greetings/goodbye.mp4',
     ),
-    Sign(
+    const Sign(
       id: 'thanks',
       categoryId: 'greetings',
       word: 'Gracias',
@@ -136,7 +144,7 @@ class SignsData {
   ];
 
   static final List<Sign> _colorSigns = [
-    Sign(
+    const Sign(
       id: 'red',
       categoryId: 'colors',
       word: 'Rojo',
@@ -145,7 +153,7 @@ class SignsData {
       icon: Icons.circle,
       imageUrl: 'assets/images/signs/colors/red.png',
     ),
-    Sign(
+    const Sign(
       id: 'blue',
       categoryId: 'colors',
       word: 'Azul',
@@ -154,7 +162,7 @@ class SignsData {
       icon: Icons.circle,
       imageUrl: 'assets/images/signs/colors/blue.png',
     ),
-    Sign(
+    const Sign(
       id: 'yellow',
       categoryId: 'colors',
       word: 'Amarillo',
@@ -167,7 +175,7 @@ class SignsData {
   ];
 
   static final List<Sign> _familySigns = [
-    Sign(
+    const Sign(
       id: 'mother',
       categoryId: 'family',
       word: 'Madre',
@@ -176,7 +184,7 @@ class SignsData {
       icon: Icons.face,
       imageUrl: 'assets/images/signs/family/mother.png',
     ),
-    Sign(
+    const Sign(
       id: 'father',
       categoryId: 'family',
       word: 'Padre',
@@ -185,7 +193,7 @@ class SignsData {
       icon: Icons.face,
       imageUrl: 'assets/images/signs/family/father.png',
     ),
-    Sign(
+    const Sign(
       id: 'sister',
       categoryId: 'family',
       word: 'Hermana',
@@ -198,7 +206,7 @@ class SignsData {
   ];
 
   static final List<Sign> _foodSigns = [
-    Sign(
+    const Sign(
       id: 'bread',
       categoryId: 'food',
       word: 'Pan',
@@ -207,7 +215,7 @@ class SignsData {
       icon: Icons.bakery_dining,
       imageUrl: 'assets/images/signs/food/bread.png',
     ),
-    Sign(
+    const Sign(
       id: 'water',
       categoryId: 'food',
       word: 'Agua',
@@ -216,7 +224,7 @@ class SignsData {
       icon: Icons.water_drop,
       imageUrl: 'assets/images/signs/food/water.png',
     ),
-    Sign(
+    const Sign(
       id: 'apple',
       categoryId: 'food',
       word: 'Manzana',

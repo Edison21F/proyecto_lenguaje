@@ -86,7 +86,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 children: [
                   _buildHeader(),
                   const SizedBox(height: 20),
-                  _buildDailyChallenge(),
                   const SizedBox(height: 20),
                   _buildCategorySection(),
                   const SizedBox(height: 10),
@@ -230,35 +229,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildDailyChallenge() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: InkWell(
-        onTap: () => _navigateTo(const DailyChallengeScreen()),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [const Color(0xFFFF7F5C), const Color(0xFFFF7F5C).withOpacity(0.8)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFFF7F5C).withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Text(
-            "¡Desafío diario disponible!",
-            style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildCategorySection() {
     return Padding(
