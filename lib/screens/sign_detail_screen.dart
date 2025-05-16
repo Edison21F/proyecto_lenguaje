@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../models/sign.dart';
 import '../services/user_service.dart';
+import '../services/video_handler.dart';
+import '../services/media_services.dart';
+import 'video_player_screen.dart';
+import 'dart:io';
 
 class SignDetailScreen extends StatefulWidget {
   final Sign sign;
@@ -15,14 +17,13 @@ class SignDetailScreen extends StatefulWidget {
   State<SignDetailScreen> createState() => _SignDetailScreenState();
 }
 
-class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerProviderStateMixin {
+class _SignDetailScreenState extends State<SignDetailScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   bool _isPlaying = false;
   bool _isFavorite = false;
-  VideoPlayerController? _videoController;
-  bool _isVideoLoaded = false;
-  File? _customImage;
-
+  final MediaUtils _mediaUtils = MediaUtils();
+  
   @override
   void initState() {
     super.initState();
@@ -39,21 +40,11 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
           _controller.reset();
         }
       });
-    
-    if (widget.sign.videoUrl != null) {
-      _videoController = VideoPlayerController.asset(widget.sign.videoUrl!)
-        ..initialize().then((_) {
-          setState(() {
-            _isVideoLoaded = true;
-          });
-        });
-    }
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _videoController?.dispose();
     super.dispose();
   }
 
@@ -76,15 +67,34 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
     });
   }
 
-  void _toggleVideo() {
-    if (_videoController != null) {
-      setState(() {
-        if (_videoController!.value.isPlaying) {
-          _videoController!.pause();
-        } else {
-          _videoController!.play();
+  void _playVideo() async {
+    if (widget.sign.videoUrl != null) {
+      if (VideoHandler.isYoutubeUrl(widget.sign.videoUrl)) {
+        // Si es un video de YouTube, abrirlo en el navegador o app
+        await VideoHandler.openYoutubeVideo(widget.sign.videoUrl!, context);
+      } else {
+        // Si es un video normal, utilizar el reproductor interno
+        final videoUrl = await _mediaUtils.getVideoUrl(widget.sign.videoUrl!);
+        
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoPlayerScreen(
+                videoUrl: videoUrl,
+                title: widget.sign.word,
+              ),
+            ),
+          );
         }
-      });
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay video disponible para esta seña'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -92,30 +102,14 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
     await UserService.toggleFavorite(widget.sign.id);
     await _loadFavoriteStatus();
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isFavorite 
-          ? "¡Seña añadida a favoritos!" 
-          : "Seña eliminada de favoritos"),
-        duration: const Duration(seconds: 2),
-        backgroundColor: _isFavorite ? Colors.green : Colors.red,
-      ),
-    );
-  }
-
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (image != null) {
-      setState(() {
-        _customImage = File(image.path);
-      });
-      
+    if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Imagen personalizada añadida"),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: Text(_isFavorite 
+            ? "¡Seña añadida a favoritos!" 
+            : "Seña eliminada de favoritos"),
+          duration: const Duration(seconds: 2),
+          backgroundColor: _isFavorite ? Colors.green : Colors.red,
         ),
       );
     }
@@ -155,19 +149,23 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
                 ),
               ),
               const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.add_photo_alternate),
-                    label: const Text("Añadir imagen"),
+              if (widget.sign.videoUrl != null)
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _playVideo,
+                    icon: const Icon(Icons.play_circle_outline),
+                    label: Text(
+                      VideoHandler.isYoutubeUrl(widget.sign.videoUrl) 
+                          ? "Ver video en YouTube" 
+                          : "Ver video demostrativo"
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.secondary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
                   ),
-                ],
-              ),
+                ),
               const SizedBox(height: 30),
               Text(
                 widget.sign.word,
@@ -243,6 +241,8 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
                         height: 1.5,
                       ),
                     ),
+                    if (widget.sign.steps != null && widget.sign.steps!.isNotEmpty)
+                      _buildStepsList(),
                   ],
                 ),
               ),
@@ -271,6 +271,11 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
                   ],
                 ),
               ),
+              if (widget.sign.difficulty > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: _buildDifficultyIndicator(),
+                ),
             ],
           ),
         ),
@@ -291,71 +296,63 @@ class _SignDetailScreenState extends State<SignDetailScreen> with SingleTickerPr
   }
 
   Widget _buildMediaContent() {
-    // Si hay una imagen personalizada, mostrarla primero
-    if (_customImage != null) {
+    // Si hay una URL de imagen, mostrarla
+    if (widget.sign.imageUrl != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Image.file(
-          _customImage!,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
+        child: FutureBuilder<String>(
+          future: _mediaUtils.getImageUrl(widget.sign.imageUrl!),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            
+            if (snapshot.hasData && snapshot.data != null) {
+              final imageUrl = snapshot.data!;
+              
+              // Si es una URL remota
+              if (imageUrl.startsWith('http')) {
+                return Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildIconAnimation();
+                  },
+                );
+              }
+              
+              // Si es un archivo local (cacheado)
+              return Image.file(
+                File(imageUrl),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildIconAnimation();
+                },
+              );
+            }
+            
+            return _buildIconAnimation();
+          },
         ),
       );
     }
     
-    // Si hay un video y está cargado, mostrar el video
-    if (_videoController != null && _isVideoLoaded) {
-      return Stack(
-        alignment: Alignment.center,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: AspectRatio(
-              aspectRatio: _videoController!.value.aspectRatio,
-              child: VideoPlayer(_videoController!),
-            ),
-          ),
-          IconButton(
-            icon: Icon(
-              _videoController!.value.isPlaying ? Icons.pause : Icons.play_arrow,
-              size: 60,
-              color: Colors.white.withOpacity(0.8),
-            ),
-            onPressed: _toggleVideo,
-          ),
-        ],
-      );
-    }
-    
-    // Si hay una imagen, mostrarla
-if (widget.sign.imageUrl != null) {
-  return ClipRRect(
-    borderRadius: BorderRadius.circular(20),
-    child: Image.network(  // ← CAMBIADO A Image.network
-      widget.sign.imageUrl!,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return Center(
-          child: CircularProgressIndicator(
-            value: loadingProgress.expectedTotalBytes != null
-                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                : null,
-          ),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        // Si hay un error al cargar la imagen, mostrar la animación de icono
-        return _buildIconAnimation();
-      },
-    ),
-  );
-}
-    
-    // Si no hay imagen ni video, mostrar la animación de icono
+    // Si no hay imagen, mostrar la animación de icono
     return _buildIconAnimation();
   }
 
@@ -422,4 +419,123 @@ if (widget.sign.imageUrl != null) {
       },
     );
   }
+
+  Widget _buildStepsList() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Pasos detallados",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: widget.sign.steps!.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          (index + 1).toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.sign.steps![index],
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDifficultyIndicator() {
+    const maxDifficulty = 5;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Nivel de dificultad",
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(maxDifficulty, (index) {
+            final isActive = index < widget.sign.difficulty;
+            return Padding(
+              padding: const EdgeInsets.only(right: 5),
+              child: Icon(
+                Icons.star,
+                color: isActive ? Colors.amber : Colors.grey[300],
+                size: 24,
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _getDifficultyDescription(widget.sign.difficulty),
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getDifficultyDescription(int difficulty) {
+    switch (difficulty) {
+      case 1:
+        return 'Muy fácil - Ideal para principiantes';
+      case 2:
+        return 'Fácil - Requiere poca práctica';
+      case 3:
+        return 'Moderado - Necesita algo de práctica';
+      case 4:
+        return 'Difícil - Requiere práctica constante';
+      case 5:
+        return 'Muy difícil - Para usuarios avanzados';
+      default:
+        return '';
+    }
+  }
 }
+
+// Añadir la clase File para importarla

@@ -3,8 +3,10 @@ import '../models/category.dart';
 import '../models/quiz_question.dart';
 import '../data/quiz_data.dart';
 import '../services/user_service.dart';
+import '../services/media_services.dart'; // Agregado para caché de imágenes
 import '../widgets/confetti_overlay.dart';
 import 'dart:math';
+import 'dart:io';
 
 class QuizScreen extends StatefulWidget {
   final Category category;
@@ -16,38 +18,67 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateMixin {
-  late List<QuizQuestion> questions;
+  late List<QuizQuestion> questions = [];
   int currentQuestionIndex = 0;
   int score = 0;
   bool answered = false;
   int? selectedAnswerIndex;
   bool quizCompleted = false;
   bool _showConfetti = false;
+  bool _isLoading = true;
+  final MediaUtils _mediaUtils = MediaUtils(); // Para caché de imágenes
   
-  late AnimationController _animationController;
-  late Animation<double> _animation;
+  // Inicializar el controlador con un valor predeterminado 
+  late AnimationController _animationController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 500),
+  );
+  
+  late Animation<double> _animation = CurvedAnimation(
+    parent: _animationController,
+    curve: Curves.easeInOut,
+  );
 
   @override
   void initState() {
     super.initState();
+    _loadQuizData();
+  }
+
+  Future<void> _loadQuizData() async {
+    // Obtener preguntas
     questions = QuizData.getQuestions(widget.category.id);
     questions.shuffle(Random());
     
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
+    // Precargar imágenes
+    if (questions.isNotEmpty) {
+      List<String> imageUrls = [];
+      for (var question in questions) {
+        if (question.imageUrl != null && question.imageUrl!.startsWith('http')) {
+          imageUrls.add(question.imageUrl!);
+        }
+      }
+      
+      // Cachear imágenes en segundo plano
+      _mediaUtils.preCacheMedia(imageUrls, []);
+    }
     
-    _animation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
+    // Verificar si el widget todavía está montado
+    if (!mounted) return;
     
-    _animationController.forward();
+    setState(() {
+      _isLoading = false;
+    });
+    
+    // Solo avanzar la animación si el widget sigue montado
+    if (mounted) {
+      _animationController.forward();
+    }
   }
 
   @override
   void dispose() {
+    // Asegurarse de liberar los recursos
     _animationController.dispose();
     super.dispose();
   }
@@ -64,6 +95,8 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
     });
     
     Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return; // Verificar si el widget todavía está montado
+      
       if (currentQuestionIndex < questions.length - 1) {
         _nextQuestion();
       } else {
@@ -73,6 +106,9 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
   }
 
   void _nextQuestion() {
+    // Verificar si todavía estamos montados
+    if (!mounted) return;
+    
     _animationController.reset();
     
     setState(() {
@@ -85,7 +121,7 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _completeQuiz() async {
-    final percentage = (score / questions.length);
+    final percentage = questions.isEmpty ? 0.0 : (score / questions.length);
     
     // Actualizar progreso de la categoría
     await UserService.updateCategoryProgress(widget.category.id, percentage);
@@ -93,6 +129,9 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
     // Añadir puntos basados en el rendimiento
     final points = (percentage * 100).toInt();
     await UserService.addPoints(points);
+    
+    // Verificar si el widget todavía está montado
+    if (!mounted) return;
     
     setState(() {
       quizCompleted = true;
@@ -132,16 +171,29 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
         title: Text("Quiz - ${widget.category.name}"),
         backgroundColor: widget.category.color,
       ),
-      body: Stack(
-        children: [
-          quizCompleted ? _buildResultScreen() : _buildQuizScreen(),
-          if (_showConfetti) const ConfettiOverlay(),
-        ],
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                quizCompleted ? _buildResultScreen() : _buildQuizScreen(),
+                if (_showConfetti) const ConfettiOverlay(),
+              ],
+            ),
     );
   }
 
   Widget _buildQuizScreen() {
+    // Verificación para evitar errores si la lista está vacía
+    if (questions.isEmpty) {
+      return const Center(
+        child: Text(
+          "No hay preguntas disponibles para esta categoría.",
+          style: TextStyle(fontSize: 18),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+    
     final question = questions[currentQuestionIndex];
     
     return Padding(
@@ -190,15 +242,7 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
                 children: [
                   // Si hay una imagen para la pregunta, mostrarla
                   if (question.imageUrl != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
-                        question.imageUrl!,
-                        height: 150,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    )
+                    _buildQuestionImage(question.imageUrl!)
                   else
                     Icon(
                       question.icon,
@@ -311,8 +355,83 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
     );
   }
 
+  Widget _buildQuestionImage(String imageUrl) {
+    return FutureBuilder<String>(
+      future: _mediaUtils.getImageUrl(imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 150,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        if (!snapshot.hasData || snapshot.data == null) {
+          return SizedBox(
+            height: 150,
+            child: Icon(
+              questions.isEmpty ? Icons.help_outline : questions[currentQuestionIndex].icon,
+              size: 80,
+              color: widget.category.color,
+            ),
+          );
+        }
+        
+        final resolvedUrl = snapshot.data!;
+        
+        // Si es una URL remota
+        if (resolvedUrl.startsWith('http')) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.network(
+              resolvedUrl,
+              height: 150,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  questions.isEmpty ? Icons.help_outline : questions[currentQuestionIndex].icon,
+                  size: 80,
+                  color: widget.category.color,
+                );
+              },
+            ),
+          );
+        }
+        
+        // Si es un archivo local (cacheado)
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.file(
+            File(resolvedUrl),
+            height: 150,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(
+                questions.isEmpty ? Icons.help_outline : questions[currentQuestionIndex].icon,
+                size: 80,
+                color: widget.category.color,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildResultScreen() {
-    final percentage = (score / questions.length) * 100;
+    final percentage = questions.isEmpty ? 0.0 : (score / questions.length) * 100;
     String message;
     Color messageColor;
     IconData icon;
@@ -415,3 +534,5 @@ class _QuizScreenState extends State<QuizScreen> with SingleTickerProviderStateM
     );
   }
 }
+
+// Importamos la clase File

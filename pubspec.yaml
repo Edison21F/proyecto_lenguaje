@@ -15,6 +15,11 @@ dependencies:
   video_player: ^2.7.0
   fl_chart: ^0.63.0
   path_provider: ^2.1.1
+  http: ^1.1.0
+  # Reemplazamos cached_network_image con funcionalidad personalizada
+  connectivity_plus: ^4.0.2
+  url_launcher: ^6.1.14
+  # Eliminamos youtube_player_flutter que está causando el error
 
 dev_dependencies:
   flutter_test:
@@ -23,9 +28,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
-
-
   
   fonts:
     - family: Poppins

@@ -7,10 +7,10 @@ class Sign {
   final String description;
   final String instructions;
   final IconData icon;
-  final String? imageUrl; // Nueva propiedad para imágenes reales
-  final List<String>? steps; // Pasos detallados para realizar la seña
-  final String? videoUrl; // URL opcional para video demostrativo
-  final int difficulty; // Nivel de dificultad (1-5)
+  final String? imageUrl; // URL de la imagen
+  final List<String>? steps; // Pasos detallados 
+  final String? videoUrl; // URL para video
+  final int difficulty;
 
   const Sign({
     required this.id,

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/sign.dart';
 import '../services/user_service.dart';
-import '../data/signs_data.dart';
+import '../services/sign_service.dart';
+import '../services/media_services.dart';
 import 'sign_detail_screen.dart';
+// Añadir la clase File para importarla
+import 'dart:io';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -16,6 +19,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
   bool _isLoading = true;
   late AnimationController _animationController;
   late Animation<double> _animation;
+  final MediaUtils _mediaUtils = MediaUtils();
 
   @override
   void initState() {
@@ -42,17 +46,30 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
   }
 
   Future<void> _loadFavorites() async {
+    // Verificar si el widget todavía está montado
+    if (!mounted) return;
+    
     final userProfile = await UserService.getCurrentUser();
     final favoriteIds = userProfile.favorites;
     
+    final signs = await SignService.getSignsByIds(favoriteIds);
+    
+    // Verificar nuevamente si el widget todavía está montado
+    if (!mounted) return;
+    
     setState(() {
-      _favoriteSigns = SignsData.getSignsByIds(favoriteIds);
+      _favoriteSigns = signs;
       _isLoading = false;
     });
   }
 
   Future<void> _removeFromFavorites(String signId) async {
+    // Verificar si el widget todavía está montado
+    if (!mounted) return;
+    
     await UserService.toggleFavorite(signId);
+    
+    // Recargar los favoritos
     _loadFavorites();
   }
 
@@ -109,9 +126,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
   }
 
   Widget _buildFavoritesList() {
-    return AnimatedList(
-      initialItemCount: _favoriteSigns.length,
-      itemBuilder: (context, index, animation) {
+    return ListView.builder(
+      itemCount: _favoriteSigns.length,
+      itemBuilder: (context, index) {
         final sign = _favoriteSigns[index];
         
         return SlideTransition(
@@ -129,7 +146,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
             ),
           ),
           child: FadeTransition(
-            opacity: animation,
+            opacity: _animation,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Dismissible(
@@ -157,27 +174,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
-                    leading: Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: sign.imageUrl != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.asset(
-                                sign.imageUrl!,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Icon(
-                              sign.icon,
-                              size: 30,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                    ),
+                    leading: _buildLeadingImage(sign),
                     title: Text(
                       sign.word,
                       style: const TextStyle(
@@ -203,7 +200,8 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
                         MaterialPageRoute(
                           builder: (context) => SignDetailScreen(sign: sign),
                         ),
-                      ).then((_) => _loadFavorites());
+                      );
+                      // Importante: No llamamos a _loadFavorites() aquí para evitar el error
                     },
                   ),
                 ),
@@ -212,6 +210,69 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLeadingImage(Sign sign) {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: sign.imageUrl != null
+          ? FutureBuilder<String>(
+              future: _mediaUtils.getImageUrl(sign.imageUrl!),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data == null) {
+                  return Icon(
+                    sign.icon,
+                    size: 30,
+                    color: Theme.of(context).colorScheme.primary,
+                  );
+                }
+
+                final imageUrl = snapshot.data!;
+                
+                if (imageUrl.startsWith('http')) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          sign.icon,
+                          size: 30,
+                          color: Theme.of(context).colorScheme.primary,
+                        );
+                      },
+                    ),
+                  );
+                } else {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      File(imageUrl),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          sign.icon,
+                          size: 30,
+                          color: Theme.of(context).colorScheme.primary,
+                        );
+                      },
+                    ),
+                  );
+                }
+              },
+            )
+          : Icon(
+              sign.icon,
+              size: 30,
+              color: Theme.of(context).colorScheme.primary,
+            ),
     );
   }
 
@@ -234,3 +295,4 @@ class _FavoritesScreenState extends State<FavoritesScreen> with SingleTickerProv
     }
   }
 }
+

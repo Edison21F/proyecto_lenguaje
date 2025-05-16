@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 import 'services/user_service.dart';
+import 'services/media_services.dart'; // Importamos el nuevo servicio
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,8 +14,9 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
   
-  // Inicializar el servicio de usuario
+  // Inicializar servicios
   await UserService.getCurrentUser();
+  await MediaUtils().initialize(); // Inicializar el servicio de medios
   
   runApp(const MyApp());
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/media_services.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,6 +15,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
   String _selectedLanguage = 'Español';
+  bool _offlineModeEnabled = true;
+  String _cacheSize = '0 MB';
+  bool _isLoading = true;
+  final MediaUtils _mediaUtils = MediaUtils();
 
   @override
   void initState() {
@@ -22,6 +27,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
     final prefs = await SharedPreferences.getInstance();
     
     setState(() {
@@ -30,10 +39,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _soundEnabled = prefs.getBool('sound_enabled') ?? true;
       _vibrationEnabled = prefs.getBool('vibration_enabled') ?? true;
       _selectedLanguage = prefs.getString('language') ?? 'Español';
+      _offlineModeEnabled = prefs.getBool('offline_mode_enabled') ?? true;
+    });
+    
+    // Cargar el tamaño de la caché
+    _cacheSize = await _mediaUtils.getCacheSize();
+    
+    setState(() {
+      _isLoading = false;
     });
   }
 
   Future<void> _saveSettings() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
     final prefs = await SharedPreferences.getInstance();
     
     await prefs.setBool('dark_mode', _isDarkMode);
@@ -41,6 +62,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('sound_enabled', _soundEnabled);
     await prefs.setBool('vibration_enabled', _vibrationEnabled);
     await prefs.setString('language', _selectedLanguage);
+    await prefs.setBool('offline_mode_enabled', _offlineModeEnabled);
+    
+    setState(() {
+      _isLoading = false;
+    });
     
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -50,8 +76,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _clearCache() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    await _mediaUtils.clearCache();
+    
+    // Actualizar el tamaño de la caché
+    _cacheSize = await _mediaUtils.getCacheSize();
+    
+    setState(() {
+      _isLoading = false;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Caché eliminada'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Configuración'),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Configuración'),
@@ -108,6 +167,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
+          const Divider(),
+          _buildSectionTitle('Datos y almacenamiento'),
+          _buildSwitchTile(
+            title: 'Modo sin conexión',
+            subtitle: 'Descargar imágenes y videos para uso sin conexión',
+            value: _offlineModeEnabled,
+            icon: Icons.offline_bolt,
+            onChanged: (value) {
+              setState(() {
+                _offlineModeEnabled = value;
+              });
+            },
+          ),
+          _buildCacheTile(),
           const Divider(),
           _buildSectionTitle('Idioma'),
           _buildLanguageDropdown(),
@@ -195,6 +268,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildCacheTile() {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          Icons.storage,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+      title: const Text('Almacenamiento en caché'),
+      subtitle: Text('Espacio utilizado: $_cacheSize'),
+      trailing: TextButton(
+        onPressed: _showClearCacheDialog,
+        child: const Text('Limpiar'),
+      ),
+    );
+  }
+
   Widget _buildLanguageDropdown() {
     return ListTile(
       leading: Container(
@@ -253,6 +348,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
       onTap: onTap,
+    );
+  }
+
+  Future<void> _showClearCacheDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Limpiar caché'),
+          content: const SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('¿Estás seguro que deseas limpiar la caché de medios?'),
+                SizedBox(height: 10),
+                Text(
+                  'Esto eliminará todas las imágenes y videos descargados. Tendrás que volver a descargarlos cuando los necesites.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancelar'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text(
+                'Limpiar',
+                style: TextStyle(color: Colors.red),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _clearCache();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/category.dart';
 import '../models/sign.dart';
-import '../data/signs_data.dart';
+import '../services/sign_service.dart'; // Usando nuestro nuevo servicio
 import '../services/user_service.dart';
+import '../services/media_services.dart'; // Agregando nuestro servicio de medios
 import 'sign_detail_screen.dart';
 import 'quiz_screen.dart';
+import 'dart:io';
 
 class CategoryScreen extends StatefulWidget {
   final Category category;
@@ -16,11 +18,12 @@ class CategoryScreen extends StatefulWidget {
 }
 
 class _CategoryScreenState extends State<CategoryScreen> with SingleTickerProviderStateMixin {
-  late List<Sign> signs;
+  late List<Sign> signs = [];
   bool _isLoading = true;
   late AnimationController _controller;
   late Animation<double> _animation;
   double _categoryProgress = 0.0;
+  final MediaUtils _mediaUtils = MediaUtils();
 
   @override
   void initState() {
@@ -44,14 +47,41 @@ class _CategoryScreenState extends State<CategoryScreen> with SingleTickerProvid
     // Simular carga de datos
     await Future.delayed(const Duration(milliseconds: 500));
     
-    // Cargar señas
-    signs = SignsData.getSigns(widget.category.id);
+    // Verificar si el widget todavía está montado antes de continuar
+    if (!mounted) return;
+    
+    // Cargar señas usando el nuevo servicio
+    final loadedSigns = await SignService.getSignsByCategory(widget.category.id);
     
     // Cargar progreso de la categoría
     final userProfile = await UserService.getCurrentUser();
-    _categoryProgress = userProfile.categoryProgress[widget.category.id] ?? 0.0;
+    final progress = userProfile.categoryProgress[widget.category.id] ?? 0.0;
+    
+    // Verificar nuevamente si el widget todavía está montado antes de actualizar el estado
+    if (!mounted) return;
+    
+    // Pre-cachear imágenes para uso sin conexión
+    List<String> imageUrls = [];
+    List<String> videoUrls = [];
+    
+    for (var sign in loadedSigns) {
+      if (sign.imageUrl != null && sign.imageUrl!.startsWith('http')) {
+        imageUrls.add(sign.imageUrl!);
+      }
+      if (sign.videoUrl != null && sign.videoUrl!.startsWith('http')) {
+        videoUrls.add(sign.videoUrl!);
+      }
+    }
+    
+    // Realizar cacheo en segundo plano
+    _mediaUtils.preCacheMedia(imageUrls, videoUrls);
+    
+    // Verificar nuevamente si el widget todavía está montado antes de actualizar el estado
+    if (!mounted) return;
     
     setState(() {
+      signs = loadedSigns;
+      _categoryProgress = progress;
       _isLoading = false;
     });
   }
@@ -307,7 +337,8 @@ class _CategoryScreenState extends State<CategoryScreen> with SingleTickerProvid
                 },
                 transitionDuration: const Duration(milliseconds: 300),
               ),
-            ).then((_) => _loadData()); // Recargar datos al volver
+            );
+            // Importante: eliminamos la llamada a _loadData() aquí para prevenir el error
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -324,10 +355,7 @@ class _CategoryScreenState extends State<CategoryScreen> with SingleTickerProvid
                   child: sign.imageUrl != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(
-                            sign.imageUrl!,
-                            fit: BoxFit.cover,
-                          ),
+                          child: _buildNetworkImage(sign.imageUrl!),
                         )
                       : Icon(
                           sign.icon,
@@ -392,6 +420,70 @@ class _CategoryScreenState extends State<CategoryScreen> with SingleTickerProvid
     );
   }
 
+  Widget _buildNetworkImage(String url) {
+    return FutureBuilder<String>(
+      future: _mediaUtils.getImageUrl(url),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        if (!snapshot.hasData || snapshot.data == null) {
+          return Icon(
+            Icons.image_not_supported,
+            size: 40,
+            color: widget.category.color,
+          );
+        }
+        
+        final imageUrl = snapshot.data!;
+        
+        // Si la imagen es remota, usar Image.network
+        if (imageUrl.startsWith('http')) {
+          return Image.network(
+            imageUrl,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                      : null,
+                  color: widget.category.color,
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(
+                Icons.image_not_supported,
+                size: 40,
+                color: widget.category.color,
+              );
+            },
+          );
+        }
+        
+        // Si la imagen es local (cacheada), usar Image.file
+        return Image.file(
+          File(imageUrl),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.image_not_supported,
+              size: 40,
+              color: widget.category.color,
+            );
+          },
+        );
+      },
+    );
+  }
+
   String _getProgressMessage(double progress) {
     if (progress < 0.2) {
       return 'Estás comenzando. ¡Sigue aprendiendo!';
@@ -404,3 +496,5 @@ class _CategoryScreenState extends State<CategoryScreen> with SingleTickerProvid
     }
   }
 }
+
+// Añadir la clase File para importarla
